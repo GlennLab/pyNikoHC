@@ -31,10 +31,10 @@ A Python implementation to interact with the Niko Home Control system via MQTT a
 
 3. Set up your environment variables in .env file:
    ```text
-    NIKO_HOST=your.niko.host
-    NIKO_USERNAME=hobby
-    NIKO_JWT_TOKEN=your.jwt.token
-    NIKO_CA_CERT_PATH=path/to/ca_cert.pem
+    HOSTNAME=your.niko.host
+    USERNAME=hobby
+    JWT_TOKEN=your.jwt.token
+    CA_CERT_PATH=path/to/ca_cert.pem
    
 4. Run the application:
     ```python
