@@ -253,17 +253,3 @@ class WallSunlightAnalyzer:
         plt.tight_layout()
         plt.show()
 
-
-
-if __name__ == "__main__":
-    analyzer = WallSunlightAnalyzer(latitude=50.9074, longitude=3.9709, wall_azimuth=164.8, language='nl')
-    date = datetime(2025, 7, 13)
-
-    hit_start, hit_end = analyzer.calculate_hitting_time(date)
-    if hit_start and hit_end:
-        print(f"Zon raakt muur van {hit_start.strftime('%H:%M')} tot {hit_end.strftime('%H:%M')}")
-    else:
-        print("Geen zonlicht op deze muurzijde vandaag.")
-
-    # analyzer.plot_daily_profile(date)
-    analyzer.plot_comprehensive_daily_profile(date)
