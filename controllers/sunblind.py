@@ -4,7 +4,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Callable, Optional
+from typing import Dict, Callable, Optional, Tuple
 
 from solar.sun_analyser import WallSunlightAnalyzer
 
@@ -15,19 +15,21 @@ class Screen:
     Data structure to represent a motorized sunblind (screen).
 
     Attributes:
-        name: Friendly name of the screen (e.g. "Living Room").
-        uuid: Device UUID used by Niko Home Control.
-        wall_azimuth: Orientation of the wall in degrees (0 = North).
-        set_position_callback: Callback function to control the screen.
-        full_close_threshold: Heat % threshold to fully close the screen.
-        open_step_threshold: Sensitivity for reopening the screen.
+        name: Friendly name of the screen
+        uuid: Device UUID used by Niko Home Control
+        wall_azimuth: Orientation of the wall in degrees (0 = North)
+        set_position_callback: Function to control the screen position
+        full_close_threshold: Heat % threshold to fully close
+        min_step: Minimum percentage change for movement (5%)
+        last_position: Last known position of the screen
     """
     name: str
     uuid: Optional[str]
     wall_azimuth: float
     set_position_callback: Callable[[str, int], None]
     full_close_threshold: float = 20.0
-    open_step_threshold: float = 5.0
+    min_step: int = 5  # Minimum 5% movement step
+    last_position: int = 100  # Default to fully open
 
 
 class SunblindController:
@@ -88,48 +90,61 @@ class SunblindController:
         )
         return min(100.0, max(0.0, heat * 100))
 
+    def _calculate_target_position(self, current_heat: float, screen: Screen) -> Tuple[int, bool]:
+        """
+        Calculate target position with minimum 5% steps.
+        Returns (position, needs_movement)
+        """
+        if current_heat >= screen.full_close_threshold:
+            return 0, abs(screen.last_position - 0) >= screen.min_step
+
+        target = 100 - int((current_heat / screen.full_close_threshold) * 100)
+        target = max(0, min(100, target))
+
+        # Apply minimum step
+        if abs(target - screen.last_position) < screen.min_step:
+            return screen.last_position, False
+        return target, True
+
     def _control_screen(self, screen: Screen):
-        """
-        Determine the current heat load and adjust the screen accordingly.
-        Close if above threshold, otherwise set a proportional opening.
-        """
+        """Control screen with minimum 5% movement steps."""
         analyzer = self._get_analyzer(screen.wall_azimuth)
-        sun_info = analyzer.calculate_angles(datetime.now())
         current_heat = self._calculate_heat_gain(analyzer, datetime.now())
 
-        self.logger.debug(
-            f"{screen.name} - Elevation: {sun_info['solar_elevation']:.1f}°, "
-            f"Azimuth: {sun_info['solar_azimuth']:.1f}°, "
-            f"Heat: {current_heat:.1f}%"
-        )
+        target_pos, needs_move = self._calculate_target_position(current_heat, screen)
+        self.logger.debug(f"{screen.name}: Heat: {current_heat:.1f}%, Target: {target_pos}%, Needs move: '{needs_move}")
 
-        if current_heat >= screen.full_close_threshold:
-            self.logger.info(f"{screen.name}: Volledig sluiten (warmte: {current_heat:.1f}%)")
-            screen.set_position_callback(screen.uuid, 0)
+        if needs_move:
+            self.logger.info(
+                f"{screen.name}: Moving from {screen.last_position}% to {target_pos}% "
+                f"(heat: {current_heat:.1f}%)"
+            )
+            screen.set_position_callback(screen.uuid, target_pos)
+            screen.last_position = target_pos
         else:
-            open_percentage = min(100, int(
-                100 - ((current_heat / screen.full_close_threshold) * 100)
-            ))
-            open_percentage = max(0, open_percentage)
-
-            self.logger.info(f"{screen.name}: Zetten op {open_percentage}% open (warmte: {current_heat:.1f}%)")
-            screen.set_position_callback(screen.uuid, open_percentage)
+            self.logger.debug(
+                f"{screen.name}: No movement needed "
+                f"(current: {screen.last_position}%, target: {target_pos}%, heat: {current_heat:.1f}%)"
+            )
 
     def register_screen(self, name: str, uuid: Optional[str], wall_azimuth: float,
                         set_position_callback: Callable[[str, int], None],
                         full_close_threshold: float = 20.0,
-                        open_step_threshold: float = 5.0):
-        """Register a new screen with its orientation and control callback."""
+                        min_step: int = 5):
+        """Register a screen with minimum step control."""
+        if min_step < 5:
+            self.logger.warning(f"Minimum step forced to 5% for {name} (requested {min_step}%)")
+            min_step = 5
+
         self.screens[name] = Screen(
             name=name,
             uuid=uuid,
             wall_azimuth=wall_azimuth,
             set_position_callback=set_position_callback,
             full_close_threshold=full_close_threshold,
-            open_step_threshold=open_step_threshold
+            min_step=min_step
         )
-        self.logger.info(f"Screen geregistreerd: {name} (azimuth: {wall_azimuth}°)")
-
+        self.logger.info(f"Registered screen: {name} (azimuth: {wall_azimuth}°, min step: {min_step}%)")
     def start(self):
         """Start the background monitoring and control thread."""
         if self.running:

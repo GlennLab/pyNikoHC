@@ -33,7 +33,7 @@ Run the controller:
 
 ```python
 from niko_home_control import NikoHomeControlAPI
-from sunblind_controller import SunblindController
+from controllers.sunblind import SunblindController
 import os
 import time
 
@@ -60,9 +60,9 @@ def create_position_callback(name: str):
 controller = SunblindController(latitude=50.9383, longitude=4.0393)
 
 # Register each screen with its wall azimuth
-controller.register_screen("Bureau", "8cf27bc3-1214-4572-bbcb-d885b1229725", 164.8, create_position_callback("Bureau"))
-controller.register_screen("Slaapkamer", "7587f559-f5bc-4723-a9a6-76d6df082973", 256.8, create_position_callback("Slaapkamer"))
-controller.register_screen("Living", "4jc0de30-224e-4bd1-b980-b3c9b830b4e6", 256.8, create_position_callback("Living"))
+controller.register_screen("Bureau", "8cf27bc3-1214-4572-bbcb-d885b1229725", 164.8, create_position_callback("Bureau"), min_step=10)
+controller.register_screen("Slaapkamer", "7587f559-f5bc-4723-a9a6-76d6df082973", 256.8, create_position_callback("Slaapkamer"), min_step=10)
+controller.register_screen("Living", "4jc0de30-224e-4bd1-b980-b3c9b830b4e6", 256.8, create_position_callback("Living"), min_step=10)
 
 # Start background control
 controller.start()
